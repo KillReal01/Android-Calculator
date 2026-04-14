@@ -4,166 +4,198 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Window
 
 Item {
     id: display
-    property int fontSize: 22
-    readonly property int maxDigits: Math.min((width / fontSize) + 1, 9)
-    readonly property color backgroundColor: "#262626"
-    readonly property color qtGreenColor: "#2CDE85"
-    property string displayedOperand: ""
-    readonly property string errorString: qsTr("ERROR")
-    readonly property bool isError: displayedOperand === errorString
-    property bool enteringDigits: false
 
-    function displayOperator(operator) {
-        calculationsListView.model.append({ "operator": operator, "operand": "" })
-        enteringDigits = true
-        calculationsListView.positionViewAtEnd()
+    signal backspaceRequested()
+
+    property string displayText: "0"
+    property string historyText: ""
+    property bool memoryActive: false
+    property string angleMode: "DEG"
+    readonly property int maxValueFontSize: 94
+    readonly property int minValueFontSize: 34
+    property real valueScale: 1.0
+
+    implicitWidth: 320
+    implicitHeight: 190
+
+    function preferredValueFontSize() {
+        const length = displayText.length
+        if (length <= 6)
+            return maxValueFontSize
+        if (length <= 8)
+            return 84
+        if (length <= 10)
+            return 72
+        if (length <= 12)
+            return 60
+        if (length <= 14)
+            return 50
+        return 42
     }
 
-    function newLine(operator, operand) {
-        displayedOperand = displayNumber(operand)
-        calculationsListView.model.append({ "operator": operator, "operand": displayedOperand })
-        enteringDigits = false
-        calculationsListView.positionViewAtEnd()
-    }
-
-    function appendDigit(digit) {
-        if (!enteringDigits)
-            calculationsListView.model.append({ "operator": "", "operand": "" })
-        const i = calculationsListView.model.count - 1
-        calculationsListView.model.get(i).operand = calculationsListView.model.get(i).operand + digit
-        enteringDigits = true
-        calculationsListView.positionViewAtEnd()
-    }
-
-    function setDigit(digit) {
-        const i = calculationsListView.model.count - 1
-        calculationsListView.model.get(i).operand = digit
-        calculationsListView.positionViewAtEnd()
-    }
-
-    function backspace() {
-        const i = calculationsListView.model.count - 1
-        if (i >= 0) {
-            let operand = calculationsListView.model.get(i).operand.toString().slice(0, -1)
-            if (operand === "-")
-                operand = ""
-            calculationsListView.model.get(i).operand = operand
-            return
-        }
-        return
-    }
-
-    function isOperandEmpty() {
-        const i = calculationsListView.model.count - 1
-        return i >= 0 ? calculationsListView.model.get(i).operand === "" : true
-    }
-
-    function isDisplayEmpty() {
-        const i = calculationsListView.model.count - 1
-        return i == -1 ? true : (i == 0 ? calculationsListView.model.get(0).operand === ""  : false)
-    }
-
-    function clear() {
-        displayedOperand = ""
-        if (enteringDigits) {
-            const i = calculationsListView.model.count - 1
-            if (i >= 0)
-                calculationsListView.model.remove(i)
-            enteringDigits = false
-        }
-    }
-
-    function allClear()
-    {
-        display.clear()
-        calculationsListView.model.clear()
-        enteringDigits = false
-    }
-
-    // Returns a string representation of a number that fits in
-    // display.maxDigits characters, trying to keep as much precision
-    // as possible. If the number cannot be displayed, returns an
-    // error string.
-    function displayNumber(num) {
-        if (typeof(num) !== "number")
-            return errorString
-
-        // deal with the absolute
-        const abs = Math.abs(num)
-
-        if (abs.toString().length <= maxDigits) {
-            return isFinite(num) ? num.toString() : errorString
-        }
-
-        if (abs < 1) {
-            // check if abs < 0.00001, if true, use exponential form
-            // if it isn't true, we can round the number without losing
-            // too much precision
-            if (Math.floor(abs * 100000) === 0) {
-                const expVal = num.toExponential(maxDigits - 6).toString()
-                if (expVal.length <= maxDigits + 1)
-                    return expVal
-
-            } else {
-                // the first two digits are zero and .
-                return num.toFixed(maxDigits - 2)
-            }
-        } else {
-            // if the integer part of num is greater than maxDigits characters, use exp form
-            const intAbs = Math.floor(abs)
-            if (intAbs.toString().length <= maxDigits)
-                return parseFloat(num.toPrecision(maxDigits - 1)).toString()
-
-            const expVal = num.toExponential(maxDigits - 6).toString()
-            if (expVal.length <= maxDigits + 1)
-                return expVal
-        }
-        return errorString
-    }
-
-    Item {
+    Rectangle {
         anchors.fill: parent
+        radius: 32
+        color: "#050505"
 
         Rectangle {
-            anchors.fill: parent
-            radius: 8
-            color: display.backgroundColor
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: 20
+            width: parent.width * 0.55
+            height: parent.height * 0.42
+            radius: width / 2
+            color: "#1E1E1E"
+            opacity: 0.18
+            rotation: -14
+        }
+    }
 
-            ListView {
-                id: calculationsListView
-                x: 5
-                y: 10
-                width: parent.width
-                height: parent.height - 2 * y
-                clip: true
-                delegate: Item {
-                    height: display.fontSize * 1.1
-                    width: calculationsListView.width
+    MouseArea {
+        anchors.fill: parent
+        hoverEnabled: true
+        property real pressX: 0
+        property real pressY: 0
 
-                    required property string operator
-                    required property string operand
+        onPressed: function(mouse) {
+            pressX = mouse.x
+            pressY = mouse.y
+        }
+
+        onReleased: function(mouse) {
+            const deltaX = mouse.x - pressX
+            const deltaY = Math.abs(mouse.y - pressY)
+            if (Math.abs(deltaX) > 44 && deltaY < 32)
+                display.backspaceRequested()
+        }
+    }
+
+    onDisplayTextChanged: valuePulse.restart()
+
+    Column {
+        anchors.fill: parent
+        anchors.margins: 20
+        spacing: 10
+
+        Item {
+            width: parent.width
+            height: 28
+
+            Row {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 8
+
+                Rectangle {
+                    visible: display.memoryActive
+                    width: visible ? 26 : 0
+                    height: 22
+                    radius: 11
+                    color: "#2C2C2E"
 
                     Text {
-                        x: 6
-                        font.pixelSize: display.fontSize
-                        color: display.qtGreenColor
-                        text: parent.operator
-                    }
-                    Text {
-                        font.pixelSize: display.fontSize
-                        anchors.right: parent.right
-                        anchors.rightMargin: 16
-                        text: parent.operand
-                        color: "white"
+                        anchors.centerIn: parent
+                        text: "M"
+                        color: "#F2F2F7"
+                        font.pixelSize: 12
+                        font.weight: Font.DemiBold
                     }
                 }
-                model: ListModel { }
-                onHeightChanged: positionViewAtEnd()
+
+                Rectangle {
+                    width: 42
+                    height: 22
+                    radius: 11
+                    color: "#2C2C2E"
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: display.angleMode
+                        color: "#AFAFB4"
+                        font.pixelSize: 11
+                        font.weight: Font.Medium
+                    }
+                }
             }
+
+            Text {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                width: parent.width * 0.72
+                horizontalAlignment: Text.AlignRight
+                elide: Text.ElideLeft
+                text: display.historyText
+                color: "#8E8E93"
+                font.pixelSize: 16
+                font.weight: Font.Medium
+            }
+        }
+
+        Item {
+            id: valueViewport
+            width: parent.width
+            height: parent.parent.height - 58
+            clip: true
+
+            Text {
+                id: displayValue
+                anchors.fill: parent
+                horizontalAlignment: Text.AlignRight
+                verticalAlignment: Text.AlignBottom
+                text: display.displayText
+                color: "#F2F2F7"
+                font.pixelSize: display.preferredValueFontSize()
+                minimumPixelSize: display.minValueFontSize
+                fontSizeMode: Text.Fit
+                font.weight: Font.Light
+                wrapMode: Text.NoWrap
+                scale: display.valueScale
+                transformOrigin: Item.Right
+
+                Behavior on scale {
+                    NumberAnimation {
+                        duration: 120
+                        easing.type: Easing.OutCubic
+                    }
+                }
+            }
+
+            Rectangle {
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                width: Math.min(parent.width * 0.18, 56)
+                visible: displayValue.paintedWidth > valueViewport.width
+                gradient: Gradient {
+                    orientation: Gradient.Horizontal
+                    GradientStop { position: 0.0; color: "#050505" }
+                    GradientStop { position: 0.38; color: "#050505" }
+                    GradientStop { position: 1.0; color: "#00000000" }
+                }
+            }
+        }
+    }
+
+    SequentialAnimation {
+        id: valuePulse
+        running: false
+
+        NumberAnimation {
+            target: display
+            property: "valueScale"
+            to: 1.018
+            duration: 70
+            easing.type: Easing.OutCubic
+        }
+        NumberAnimation {
+            target: display
+            property: "valueScale"
+            to: 1.0
+            duration: 120
+            easing.type: Easing.OutCubic
         }
     }
 }

@@ -3,150 +3,336 @@
 
 .pragma library
 
-let curVal = 0
-let previousOperator = ""
-let lastOp = ""
-let digits = ""
+let currentValue = "0"
+let storedValue = null
+let pendingOperator = ""
+let statusText = ""
+let waitingForOperand = true
+let justEvaluated = false
+let memoryValue = 0
+let angleMode = "DEG"
 
-function isOperationDisabled(op, display) {
-    if (digits !== "" && lastOp !== "=" && (op === "π" || op === "e"))
-        return true
-    if (digits === "" && !((op >= "0" && op <= "9") || op === "π" || op === "e" || op === "AC"))
-        return true
-    if (op === "bs" && (display.isOperandEmpty() || !((lastOp >= "0" && lastOp <= "9")
-                                                      || lastOp === "π" || lastOp === "e" || lastOp === ".")))
-        return true
-    if (op === '=' && previousOperator.length != 1)
-        return true
-    if (op === "." && digits.search(/\./) != -1)
-        return true
-    if (op === "√" &&  digits.search(/-/) != -1)
-        return true
-    if (op === "AC" && display.isDisplayEmpty())
-        return true
+const errorText = "Error"
 
-    return false
+function reset() {
+    currentValue = "0"
+    storedValue = null
+    pendingOperator = ""
+    statusText = ""
+    waitingForOperand = true
+    justEvaluated = false
+    memoryValue = 0
+    angleMode = "DEG"
 }
 
-function digitPressed(op, display) {
-    if (isOperationDisabled(op, display))
-        return
-    if (lastOp === "π" || lastOp === "e")
-        return
-    // handle mathematical constants
-    if (op === "π") {
-        lastOp = op
-        digits = Math.PI.toPrecision(display.maxDigits - 1).toString()
-        display.appendDigit(digits)
-        return
+function getState() {
+    return {
+        displayText: currentValue,
+        historyText: statusText,
+        activeOperator: pendingOperator,
+        memoryActive: memoryValue !== 0,
+        angleMode: angleMode
     }
-    if (op === "e") {
-        lastOp = op
-        digits = Math.E.toPrecision(display.maxDigits - 1).toString()
-        display.appendDigit(digits)
+}
+
+function isErrorState() {
+    return currentValue === errorText
+}
+
+function getCurrentNumber() {
+    return Number(currentValue)
+}
+
+function setError() {
+    currentValue = errorText
+    statusText = ""
+    storedValue = null
+    pendingOperator = ""
+    waitingForOperand = true
+    justEvaluated = true
+}
+
+function formatNumber(value) {
+    if (!isFinite(value))
+        return errorText
+
+    if (Object.is(value, -0))
+        value = 0
+
+    if (value === 0)
+        return "0"
+
+    const abs = Math.abs(value)
+    let text = Number(value.toPrecision(12)).toString()
+    if (abs >= 1e12 || abs < 1e-9)
+        text = value.toExponential(7).replace("e", "E")
+    if (text.length > 14)
+        text = value.toExponential(6).replace("e", "E")
+
+    return text
+}
+
+function setDisplayNumber(value) {
+    const text = formatNumber(value)
+    if (text === errorText) {
+        setError()
+        return false
+    }
+
+    currentValue = text
+    return true
+}
+
+function toRadians(value) {
+    return angleMode === "DEG" ? value * Math.PI / 180 : value
+}
+
+function factorial(value) {
+    if (!Number.isInteger(value) || value < 0 || value > 170)
+        return NaN
+
+    let result = 1
+    for (let i = 2; i <= value; ++i)
+        result *= i
+    return result
+}
+
+function startNewEntry(text) {
+    currentValue = text
+    waitingForOperand = false
+    justEvaluated = false
+}
+
+function input(token) {
+    if (token.length !== 1 && token !== ".")
+        return
+
+    if (isErrorState()) {
+        currentValue = "0"
+        waitingForOperand = true
+        justEvaluated = false
+    }
+
+    if (waitingForOperand || (justEvaluated && pendingOperator === "")) {
+        if (token === ".") {
+            startNewEntry("0.")
+        } else {
+            startNewEntry(token)
+        }
         return
     }
 
-    // append a digit to another digit or decimal point
-    if (lastOp.toString().length === 1 && ((lastOp >= "0" && lastOp <= "9") || lastOp === ".") ) {
-        if (digits.length >= display.maxDigits)
-            return
-        digits = digits + op.toString()
-        display.appendDigit(op.toString())
-    // else just write a single digit to display
+    if (token === "." && currentValue.indexOf(".") !== -1)
+        return
+
+    if (currentValue === "0" && token !== ".") {
+        currentValue = token
     } else {
-        digits = op.toString()
-        display.appendDigit(digits)
+        currentValue += token
     }
-    lastOp = op
 }
 
-function operatorPressed(op, display) {
-    if (isOperationDisabled(op, display))
-        return
+function applyConstant(name) {
+    if (name === "π")
+        setDisplayNumber(Math.PI)
+    else if (name === "e")
+        setDisplayNumber(Math.E)
+    else if (name === "Rand" || name === "RND")
+        setDisplayNumber(Math.random())
 
-    if (op === "±") {
-        digits = Number(digits.valueOf() * -1).toString()
-        display.setDigit(display.displayNumber(Number(digits)))
+    waitingForOperand = false
+    justEvaluated = false
+}
+
+function applyUnaryOperation(op) {
+    const value = getCurrentNumber()
+    let result = NaN
+
+    switch (op) {
+    case "±":
+        result = value * -1
+        break
+    case "%":
+        if (pendingOperator !== "" && storedValue !== null)
+            result = storedValue * value / 100
+        else
+            result = value / 100
+        break
+    case "1/x":
+        result = value === 0 ? NaN : 1 / value
+        break
+    case "x²":
+        result = value * value
+        break
+    case "x³":
+        result = value * value * value
+        break
+    case "²√x":
+        result = value < 0 ? NaN : Math.sqrt(value)
+        break
+    case "³√x":
+        result = Math.cbrt(value)
+        break
+    case "eˣ":
+        result = Math.exp(value)
+        break
+    case "10ˣ":
+        result = Math.pow(10, value)
+        break
+    case "ln":
+        result = value <= 0 ? NaN : Math.log(value)
+        break
+    case "log10":
+    case "log":
+        result = value <= 0 ? NaN : Math.log10(value)
+        break
+    case "sin":
+        result = Math.sin(toRadians(value))
+        break
+    case "cos":
+        result = Math.cos(toRadians(value))
+        break
+    case "tan":
+        result = Math.tan(toRadians(value))
+        break
+    case "x!":
+        result = factorial(value)
+        break
+    default:
         return
     }
 
-    if (op === "bs") {
-        digits = digits.slice(0, -1)
-        if (digits === "-")
-            digits = ""
-        display.backspace()
+    if (!setDisplayNumber(result))
+        return
+
+    const operandLabel = pendingOperator !== "" && storedValue !== null
+            ? formatNumber(storedValue) + " " + pendingOperator
+            : ""
+    statusText = operandLabel !== "" ? operandLabel + " " + op : op
+    waitingForOperand = false
+}
+
+function executeBinary(left, right, op) {
+    switch (op) {
+    case "+":
+        return left + right
+    case "−":
+        return left - right
+    case "×":
+        return left * right
+    case "÷":
+        return right === 0 ? NaN : left / right
+    case "xʸ":
+        return Math.pow(left, right)
+    case "y√x":
+    case "ʸ√x":
+        return left === 0 ? NaN : Math.pow(right, 1 / left)
+    default:
+        return right
+    }
+}
+
+function setBinaryOperation(op) {
+    if (isErrorState())
+        return
+
+    const inputValue = getCurrentNumber()
+
+    if (pendingOperator !== "" && storedValue !== null && !waitingForOperand) {
+        const chainedResult = executeBinary(storedValue, inputValue, pendingOperator)
+        if (!setDisplayNumber(chainedResult))
+            return
+        storedValue = getCurrentNumber()
+    } else if (storedValue === null || !waitingForOperand) {
+        storedValue = inputValue
+    }
+
+    pendingOperator = op
+    statusText = formatNumber(storedValue) + " " + op
+    waitingForOperand = true
+    justEvaluated = false
+}
+
+function evaluate() {
+    if (pendingOperator === "" || storedValue === null || isErrorState())
+        return
+
+    const rightValue = getCurrentNumber()
+    const leftValue = storedValue
+    const expression = formatNumber(leftValue) + " " + pendingOperator + " " + formatNumber(rightValue) + " ="
+    const result = executeBinary(leftValue, rightValue, pendingOperator)
+
+    if (!setDisplayNumber(result))
+        return
+
+    statusText = expression
+    storedValue = null
+    pendingOperator = ""
+    waitingForOperand = true
+    justEvaluated = true
+}
+
+function handleMemory(op) {
+    if (isErrorState())
+        return
+
+    const value = getCurrentNumber()
+    if (op === "mc") {
+        memoryValue = 0
+    } else if (op === "m+") {
+        memoryValue += value
+    } else if (op === "m-") {
+        memoryValue -= value
+    } else if (op === "mr") {
+        setDisplayNumber(memoryValue)
+        waitingForOperand = false
+        justEvaluated = false
+    }
+}
+
+function perform(op) {
+    if (op === "AC") {
+        reset()
         return
     }
 
-    lastOp = op
-
-    if (previousOperator === "+") {
-        digits = (Number(curVal) + Number(digits.valueOf())).toString()
-    } else if (previousOperator === "−") {
-        digits = (Number(curVal) - Number(digits.valueOf())).toString()
-    } else if (previousOperator === "×") {
-        digits = (Number(curVal) * Number(digits.valueOf())).toString()
-    } else if (previousOperator === "÷") {
-        digits = (Number(curVal) / Number(digits.valueOf())).toString()
-    }
-
-
-    if (op === "+" || op === "−" || op === "×" || op === "÷") {
-        previousOperator = op
-        curVal = digits.valueOf()
-        digits = ""
-        display.displayOperator(previousOperator)
+    if (op === "angle") {
+        angleMode = angleMode === "DEG" ? "RAD" : "DEG"
         return
     }
 
-    curVal = 0
-    previousOperator = ""
+    if (isErrorState() && op !== "AC")
+        return
+
+    if (op === "⌫") {
+        if (waitingForOperand || justEvaluated)
+            return
+
+        currentValue = currentValue.slice(0, -1)
+        if (currentValue === "" || currentValue === "-")
+            currentValue = "0"
+        return
+    }
+
+    if (op === "π" || op === "e" || op === "Rand" || op === "RND") {
+        applyConstant(op)
+        return
+    }
+
+    if (op === "mc" || op === "m+" || op === "m-" || op === "mr") {
+        handleMemory(op)
+        return
+    }
 
     if (op === "=") {
-        display.newLine("=", Number(digits))
+        evaluate()
+        return
     }
 
-    if (op === "√") {
-        digits = (Math.sqrt(digits.valueOf())).toString()
-        display.newLine("√", Number(digits))
-    } else if (op === "⅟x") {
-        digits = (1 / digits.valueOf()).toString()
-        display.newLine("⅟x", Number(digits))
-    } else if (op === "x²") {
-        digits = (digits.valueOf() * digits.valueOf()).toString()
-        display.newLine("x²", Number(digits))
-    } else if (op === "x³") {
-        digits = (digits.valueOf() * digits.valueOf() * digits.valueOf()).toString()
-        display.newLine("x³", Number(digits))
-    } else if (op === "|x|") {
-        digits = (Math.abs(digits.valueOf())).toString()
-        display.newLine("|x|", Number(digits))
-    } else if (op === "⌊x⌋") {
-        digits = (Math.floor(digits.valueOf())).toString()
-        display.newLine("⌊x⌋", Number(digits))
-    } else if (op === "sin") {
-        digits = Number(Math.sin(digits.valueOf())).toString()
-        display.newLine("sin", Number(digits))
-    } else if (op === "cos") {
-        digits = Number(Math.cos(digits.valueOf())).toString()
-        display.newLine("cos", Number(digits))
-    } else if (op === "tan") {
-        digits = Number(Math.tan(digits.valueOf())).toString()
-        display.newLine("tan", Number(digits))
-    } else if (op === "log") {
-        digits = Number(Math.log10(digits.valueOf())).toString()
-        display.newLine("log", Number(digits))
-    } else if (op === "ln") {
-        digits = Number(Math.log(digits.valueOf())).toString()
-        display.newLine("ln", Number(digits))
+    if (op === "+" || op === "−" || op === "×" || op === "÷" || op === "xʸ" || op === "y√x" || op === "ʸ√x") {
+        setBinaryOperation(op)
+        return
     }
 
-    if (op === "AC") {
-        display.allClear()
-        curVal = 0
-        lastOp = ""
-        digits = ""
-        previousOperator = ""
-    }
+    applyUnaryOperation(op)
 }

@@ -4,143 +4,149 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import "calculator.js" as CalcEngine
 import QtQuick.Layouts
 
 Item {
     id: controller
-    implicitWidth: isPortraitMode ? portraitModeWidth : landscapeModeWidth
-    implicitHeight: mainGrid.height
-
-    readonly property color qtGreenColor: "#2CDE85"
-    readonly property color backspaceRedColor: "#DE2C2C"
-    readonly property int spacing: 5
 
     property bool isPortraitMode: root.isPortraitMode
-    property int portraitModeWidth: mainGrid.width
-    property int landscapeModeWidth: scientificGrid.width + mainGrid.width
+    property string activeOperator: ""
+    property string angleMode: "DEG"
 
-    function updateDimmed(){
-        for (let i = 0; i < mainGrid.children.length; i++){
-            mainGrid.children[i].dimmed = root.isButtonDisabled(mainGrid.children[i].text)
-        }
-        for (let j = 0; j < scientificGrid.children.length; j++){
-            scientificGrid.children[j].dimmed = root.isButtonDisabled(scientificGrid.children[j].text)
-        }
+    readonly property int portraitButtonSize: 80
+    readonly property int landscapeButtonSize: 66
+    readonly property int scientificButtonSize: 54
+    readonly property int portraitSpacing: 10
+    readonly property int landscapeSpacing: 8
+    readonly property int mainButtonSize: isPortraitMode ? portraitButtonSize : landscapeButtonSize
+    readonly property int spacing: isPortraitMode ? portraitSpacing : landscapeSpacing
+    readonly property int portraitModeWidth: mainGrid.implicitWidth
+    readonly property int landscapeModeWidth: scientificGrid.implicitWidth + mainGrid.implicitWidth + spacing
+
+    implicitWidth: isPortraitMode ? portraitModeWidth : landscapeModeWidth
+    implicitHeight: isPortraitMode ? mainGrid.implicitHeight : Math.max(scientificGrid.implicitHeight, mainGrid.implicitHeight)
+
+    component MainButton: CalculatorButton {
+        implicitWidth: controller.mainButtonSize
+        implicitHeight: controller.mainButtonSize
     }
 
-    component DigitButton: CalculatorButton {
-        onReleased: {
-            root.digitPressed(text)
-            updateDimmed()
-        }
+    component ScientificButton: CalculatorButton {
+        buttonRole: "scientific"
+        implicitWidth: controller.scientificButtonSize
+        implicitHeight: controller.scientificButtonSize
     }
 
-    component OperatorButton: CalculatorButton {
-        onReleased: {
-            root.operatorPressed(text)
-            updateDimmed()
-        }
-        textColor: controller.qtGreenColor
-        implicitWidth: 48
-        dimmable: true
-    }
-
-    Component.onCompleted: updateDimmed()
-
-    Rectangle {
-        id: numberPad
+    RowLayout {
         anchors.fill: parent
-        radius: 8
-        color: "transparent"
+        spacing: controller.spacing
 
-        RowLayout {
-            spacing: controller.spacing
+        GridLayout {
+            id: scientificGrid
+            columns: 5
+            rowSpacing: controller.spacing
+            columnSpacing: controller.spacing
+            visible: !controller.isPortraitMode
 
-            GridLayout {
-                id: scientificGrid
-                columns: 3
-                columnSpacing: controller.spacing
-                rowSpacing: controller.spacing
-                visible: !isPortraitMode
+            ScientificButton { text: "mc"; onClicked: root.operatorPressed("mc") }
+            ScientificButton { text: "m+"; onClicked: root.operatorPressed("m+") }
+            ScientificButton { text: "m-"; onClicked: root.operatorPressed("m-") }
+            ScientificButton { text: "mr"; onClicked: root.operatorPressed("mr") }
+            ScientificButton { text: "⌫"; onClicked: root.operatorPressed("⌫") }
 
-                OperatorButton { text: "x²" }
-                OperatorButton { text: "⅟x" }
-                OperatorButton { text: "√" }
-                OperatorButton { text: "x³" }
-                OperatorButton { text: "sin" }
-                OperatorButton { text: "|x|" }
-                OperatorButton { text: "log" }
-                OperatorButton { text: "cos" }
-                DigitButton {
-                    text: "e"
-                    dimmable: true
-                    implicitWidth: 48
-                }
-                OperatorButton { text: "ln" }
-                OperatorButton { text: "tan" }
-                DigitButton {
-                    text: "π"
-                    dimmable: true
-                    implicitWidth: 48
-                }
+            ScientificButton { text: "x²"; onClicked: root.operatorPressed("x²") }
+            ScientificButton { text: "x³"; onClicked: root.operatorPressed("x³") }
+            ScientificButton {
+                text: "xʸ"
+                activeState: controller.activeOperator === "xʸ"
+                onClicked: root.operatorPressed("xʸ")
+            }
+            ScientificButton { text: "eˣ"; onClicked: root.operatorPressed("eˣ") }
+            ScientificButton { text: "10ˣ"; onClicked: root.operatorPressed("10ˣ") }
+
+            ScientificButton { text: "1/x"; onClicked: root.operatorPressed("1/x") }
+            ScientificButton { text: "²√x"; onClicked: root.operatorPressed("²√x") }
+            ScientificButton { text: "³√x"; onClicked: root.operatorPressed("³√x") }
+            ScientificButton {
+                text: "ʸ√x"
+                activeState: controller.activeOperator === "ʸ√x"
+                onClicked: root.operatorPressed("ʸ√x")
+            }
+            ScientificButton { text: "x!"; onClicked: root.operatorPressed("x!") }
+
+            ScientificButton { text: "ln"; onClicked: root.operatorPressed("ln") }
+            ScientificButton { text: "log"; onClicked: root.operatorPressed("log") }
+            ScientificButton { text: "sin"; onClicked: root.operatorPressed("sin") }
+            ScientificButton { text: "cos"; onClicked: root.operatorPressed("cos") }
+            ScientificButton { text: "tan"; onClicked: root.operatorPressed("tan") }
+
+            ScientificButton { text: "π"; onClicked: root.operatorPressed("π") }
+            ScientificButton { text: "e"; onClicked: root.operatorPressed("e") }
+            ScientificButton { text: "RND"; onClicked: root.operatorPressed("RND") }
+            ScientificButton { text: controller.angleMode; onClicked: root.operatorPressed("angle") }
+            ScientificButton { text: "%"; onClicked: root.operatorPressed("%") }
+        }
+
+        GridLayout {
+            id: mainGrid
+            columns: 4
+            rowSpacing: controller.spacing
+            columnSpacing: controller.spacing
+
+            MainButton { text: "AC"; buttonRole: "utility"; onClicked: root.operatorPressed("AC") }
+            MainButton { text: "±"; buttonRole: "utility"; onClicked: root.operatorPressed("±") }
+            MainButton { text: "%"; buttonRole: "utility"; onClicked: root.operatorPressed("%") }
+            MainButton {
+                text: "÷"
+                buttonRole: "operator"
+                activeState: controller.activeOperator === "÷"
+                onClicked: root.operatorPressed("÷")
             }
 
-            GridLayout {
-                id: mainGrid
-                columns: 5
-                columnSpacing: controller.spacing
-                rowSpacing: controller.spacing
-
-                BackspaceButton {}
-                DigitButton { text: "7" }
-                DigitButton { text: "8" }
-                DigitButton { text: "9" }
-                OperatorButton {
-                    text: "÷"
-                    implicitWidth: 38
-                }
-
-                OperatorButton {
-                    text: "AC"
-                    textColor: controller.backspaceRedColor
-                    accentColor: controller.backspaceRedColor
-                }
-                DigitButton { text: "4" }
-                DigitButton { text: "5" }
-                DigitButton { text: "6" }
-                OperatorButton {
-                    text: "×"
-                    implicitWidth: 38
-                }
-
-                OperatorButton {
-                    text: "="
-                    implicitHeight: 81
-                    Layout.rowSpan: 2
-                }
-                DigitButton { text: "1" }
-                DigitButton { text: "2" }
-                DigitButton { text: "3" }
-                OperatorButton {
-                    text: "−"
-                    implicitWidth: 38
-                }
-
-                OperatorButton {
-                    text: "±"
-                    implicitWidth: 38
-                }
-                DigitButton { text: "0" }
-                DigitButton {
-                    text: "."
-                    dimmable: true
-                }
-                OperatorButton {
-                    text: "+"
-                    implicitWidth: 38
-                }
+            MainButton { text: "7"; onClicked: root.digitPressed("7") }
+            MainButton { text: "8"; onClicked: root.digitPressed("8") }
+            MainButton { text: "9"; onClicked: root.digitPressed("9") }
+            MainButton {
+                text: "×"
+                buttonRole: "operator"
+                activeState: controller.activeOperator === "×"
+                onClicked: root.operatorPressed("×")
             }
-        } // RowLayout
+
+            MainButton { text: "4"; onClicked: root.digitPressed("4") }
+            MainButton { text: "5"; onClicked: root.digitPressed("5") }
+            MainButton { text: "6"; onClicked: root.digitPressed("6") }
+            MainButton {
+                text: "−"
+                buttonRole: "operator"
+                activeState: controller.activeOperator === "−"
+                onClicked: root.operatorPressed("−")
+            }
+
+            MainButton { text: "1"; onClicked: root.digitPressed("1") }
+            MainButton { text: "2"; onClicked: root.digitPressed("2") }
+            MainButton { text: "3"; onClicked: root.digitPressed("3") }
+            MainButton {
+                text: "+"
+                buttonRole: "operator"
+                activeState: controller.activeOperator === "+"
+                onClicked: root.operatorPressed("+")
+            }
+
+            MainButton {
+                text: "0"
+                wide: true
+                Layout.columnSpan: 2
+                Layout.fillWidth: true
+                onClicked: root.digitPressed("0")
+            }
+            MainButton { text: "."; onClicked: root.digitPressed(".") }
+            MainButton { text: "="; buttonRole: "operator"; onClicked: root.operatorPressed("=") }
+        }
+
+        Item {
+            Layout.fillWidth: true
+            visible: !controller.isPortraitMode
+        }
     }
 }

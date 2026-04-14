@@ -2,125 +2,128 @@
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR BSD-3-Clause
 
 import QtQuick
-import QtQuick.Window
 import QtQuick.Layouts
+import QtQuick.Window
 import "content"
 import "content/calculator.js" as CalcEngine
 
-
 Window {
     visible: true
-    width: 320
-    height: 480
-    minimumWidth: Math.max(numberPad.portraitModeWidth, display.minWidth) + root.margin * 2
-    minimumHeight: display.minHeight + numberPad.height + root.margin * 3
-    color: root.backgroundColor
+    width: 390
+    height: 760
+    color: "#000000"
+    minimumWidth: root.isPortraitMode ? 360 : 720
+    minimumHeight: root.isPortraitMode ? 680 : 420
+    title: qsTr("Calculator")
 
     Item {
         id: root
         anchors.fill: parent
+        focus: true
 
-        readonly property int margin: 18
-        readonly property color backgroundColor: "#222222"
-        readonly property int minLandscapeModeWidth: numberPad.landscapeModeWidth
-                                                     + display.minWidth
-                                                     + margin * 3
+        readonly property int padding: isPortraitMode ? 18 : 20
+        readonly property int sectionSpacing: isPortraitMode ? 16 : 18
+        readonly property int minLandscapeModeWidth: 720
         property bool isPortraitMode: width < minLandscapeModeWidth
+        property string activeOperator: ""
+        property bool memoryActive: false
+        property string angleMode: "DEG"
 
-        onIsPortraitModeChanged: {
-            if (isPortraitMode) {
-                portraitMode.visible = true
-                landscapeMode.visible = false
-            } else {
-                portraitMode.visible = false
-                landscapeMode.visible = true
-            }
+        function refreshUi() {
+            const state = CalcEngine.getState()
+            display.displayText = state.displayText
+            display.historyText = state.historyText
+            display.memoryActive = state.memoryActive
+            display.angleMode = state.angleMode
+            activeOperator = state.activeOperator
+            memoryActive = state.memoryActive
+            angleMode = state.angleMode
         }
 
-        Display {
-            id: display
-            readonly property int minWidth: 210
-            readonly property int minHeight: 60
-
-            Layout.minimumWidth: minWidth
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            Layout.margins: root.margin
-
-            // remove the margin on the side that the numberPad is on, to prevent a double margin
-            Layout.bottomMargin: root.isPortraitMode ? 0 : root.margin
-            Layout.rightMargin: root.isPortraitMode ? root.margin : 0
+        function operatorPressed(operatorText) {
+            CalcEngine.perform(operatorText)
+            refreshUi()
         }
 
-        NumberPad {
-            id: numberPad;
-            Layout.margins: root.margin
+        function digitPressed(digitText) {
+            CalcEngine.input(digitText)
+            refreshUi()
         }
 
-        // define the responsive layouts
-        ColumnLayout {
-            id: portraitMode
+        Component.onCompleted: {
+            CalcEngine.reset()
+            refreshUi()
+            root.forceActiveFocus()
+        }
+
+        Rectangle {
             anchors.fill: parent
-            visible: true
-
-            LayoutItemProxy {
-                target: display
-                Layout.minimumHeight: display.minHeight
-            }
-            LayoutItemProxy {
-                target: numberPad
-                Layout.alignment: Qt.AlignHCenter
-            }
+            color: "#000000"
         }
 
-        RowLayout {
-            id: landscapeMode
+        Item {
             anchors.fill: parent
-            visible: false
+            anchors.margins: root.padding
 
-            LayoutItemProxy {
-                target: display
+            Display {
+                id: display
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.bottom: numberPad.top
+                anchors.bottomMargin: root.sectionSpacing
+                implicitHeight: root.isPortraitMode ? 210 : 176
+                onBackspaceRequested: root.operatorPressed("⌫")
             }
-            LayoutItemProxy {
-                target: numberPad
-                Layout.alignment: Qt.AlignVCenter
-            }
-        }
 
-        function operatorPressed(operator) {
-            CalcEngine.operatorPressed(operator, display)
-        }
-        function digitPressed(digit) {
-            CalcEngine.digitPressed(digit, display)
-        }
-        function isButtonDisabled(op) {
-            return CalcEngine.isOperationDisabled(op, display)
+            NumberPad {
+                id: numberPad
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom
+                activeOperator: root.activeOperator
+                angleMode: root.angleMode
+            }
         }
 
         Keys.onPressed: function(event) {
-            switch (event.key) {
-                case Qt.Key_0: digitPressed("0"); break;
-                case Qt.Key_1: digitPressed("1"); break;
-                case Qt.Key_2: digitPressed("2"); break;
-                case Qt.Key_3: digitPressed("3"); break;
-                case Qt.Key_4: digitPressed("4"); break;
-                case Qt.Key_5: digitPressed("5"); break;
-                case Qt.Key_6: digitPressed("6"); break;
-                case Qt.Key_7: digitPressed("7"); break;
-                case Qt.Key_8: digitPressed("8"); break;
-                case Qt.Key_9: digitPressed("9"); break;
-                case Qt.Key_E: digitPressed("e"); break;
-                case Qt.Key_P: digitPressed("π"); break;
-                case Qt.Key_Plus: operatorPressed("+"); break;
-                case Qt.Key_Minus: operatorPressed("-"); break;
-                case Qt.Key_Asterisk: operatorPressed("×"); break;
-                case Qt.Key_Slash: operatorPressed("÷"); break;
-                case Qt.Key_Enter:
-                case Qt.Key_Return: operatorPressed("="); break;
-                case Qt.Key_Comma:
-                case Qt.Key_Period: digitPressed("."); break;
-                case Qt.Key_Backspace: operatorPressed("bs"); break;
+            if (event.key >= Qt.Key_0 && event.key <= Qt.Key_9) {
+                digitPressed(String.fromCharCode(event.key))
+                event.accepted = true
+                return
             }
+
+            switch (event.key) {
+            case Qt.Key_Comma:
+            case Qt.Key_Period:
+                digitPressed(".")
+                break
+            case Qt.Key_Plus:
+                operatorPressed("+")
+                break
+            case Qt.Key_Minus:
+                operatorPressed("−")
+                break
+            case Qt.Key_Asterisk:
+                operatorPressed("×")
+                break
+            case Qt.Key_Slash:
+                operatorPressed("÷")
+                break
+            case Qt.Key_Return:
+            case Qt.Key_Enter:
+                operatorPressed("=")
+                break
+            case Qt.Key_Backspace:
+                operatorPressed("⌫")
+                break
+            case Qt.Key_Percent:
+                operatorPressed("%")
+                break
+            default:
+                return
+            }
+
+            event.accepted = true
         }
     }
 }

@@ -6,61 +6,91 @@ import QtQuick.Controls
 
 RoundButton {
     id: button
-    implicitWidth: 38
-    implicitHeight: 38
-    radius: buttonRadius
 
-    property bool dimmable: false
-    property bool dimmed: false
-    readonly property int fontSize: 22
-    readonly property int buttonRadius: 8
-    property color textColor: "#FFFFFF"
-    property color accentColor: "#2CDE85"
-    readonly property color backgroundColor: "#222222"
-    readonly property color borderColor: "#A9A9A9"
+    property string buttonRole: "digit"
+    property bool activeState: false
+    property bool wide: false
 
-    function getBackgroundColor() {
-        if (button.dimmable && button.dimmed)
-            return backgroundColor
-        if (button.pressed)
-            return accentColor
-        return backgroundColor
+    implicitWidth: 80
+    implicitHeight: 80
+    radius: height / 2
+    hoverEnabled: true
+
+    function backgroundColor() {
+        if (buttonRole === "operator")
+            return activeState ? "#F2F2F7" : "#FF9F0A"
+        if (buttonRole === "utility")
+            return "#A5A5AA"
+        if (buttonRole === "scientific")
+            return "#1C1C1E"
+        return "#2C2C2E"
     }
 
-    function getBorderColor() {
-        if (button.dimmable && button.dimmed)
-            return borderColor
-        if (button.pressed || button.hovered)
-            return accentColor
-        return borderColor
+    function foregroundColor() {
+        if (buttonRole === "operator")
+            return activeState ? "#FF9F0A" : "#FFFFFF"
+        if (buttonRole === "utility")
+            return "#000000"
+        return "#FFFFFF"
     }
 
-    function getTextColor() {
-        if (button.dimmable && button.dimmed)
-            return Qt.darker(textColor)
-        if (button.pressed)
-            return backgroundColor
-        if (button.hovered)
-            return accentColor
-        return textColor
+    function overlayColor() {
+        if (buttonRole === "operator")
+            return activeState ? "#14FF9F0A" : "#1FFFFFFF"
+        if (buttonRole === "utility")
+            return "#20FFFFFF"
+        return "#18FFFFFF"
+    }
+
+    scale: pressed ? 0.96 : 1.0
+    Behavior on scale {
+        NumberAnimation {
+            duration: 120
+            easing.type: Easing.OutCubic
+        }
     }
 
     background: Rectangle {
-        radius: button.buttonRadius
-        color: getBackgroundColor()
-        border.color: getBorderColor()
+        radius: button.height / 2
+        color: button.backgroundColor()
+
+        Behavior on color {
+            ColorAnimation {
+                duration: 140
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            radius: parent.radius
+            color: button.overlayColor()
+            opacity: button.hovered || button.pressed ? 1.0 : 0.0
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: 120
+                    easing.type: Easing.OutCubic
+                }
+            }
+        }
     }
 
     contentItem: Text {
+        anchors.fill: parent
         text: button.text
-        font.pixelSize: button.fontSize
-        horizontalAlignment: Text.AlignHCenter
+        color: button.foregroundColor()
+        font.pixelSize: button.wide ? 34 : (button.buttonRole === "scientific" ? 21 : 32)
+        font.weight: button.buttonRole === "utility" ? Font.DemiBold : Font.Medium
+        horizontalAlignment: button.wide ? Text.AlignLeft : Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
-        color: getTextColor()
+        leftPadding: button.wide ? 28 : 0
+        rightPadding: 0
+
         Behavior on color {
             ColorAnimation {
-                duration: 120
-                easing.type: Easing.OutElastic
+                duration: 140
+                easing.type: Easing.OutCubic
             }
         }
     }
