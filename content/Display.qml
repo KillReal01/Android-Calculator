@@ -40,18 +40,6 @@ Item {
         anchors.fill: parent
         radius: 32
         color: "#050505"
-
-        Rectangle {
-            anchors.right: parent.right
-            anchors.top: parent.top
-            anchors.margins: 20
-            width: parent.width * 0.55
-            height: parent.height * 0.42
-            radius: width / 2
-            color: "#1E1E1E"
-            opacity: 0.18
-            rotation: -14
-        }
     }
 
     MouseArea {
